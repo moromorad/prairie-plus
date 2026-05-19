@@ -1,0 +1,19 @@
+/* Make the root canvas dark and use dark scrollbars */
+html.pl-dark-mode {
+  background-color: #1a1a1a !important;
+  color-scheme: dark;
+}
+
+/* Apply the filter to the body instead of html so the background canvas is unaffected */
+html.pl-dark-mode body {
+  filter: invert(0.9) hue-rotate(180deg);
+  background-color: #ffffff !important; /* White inverts to #1a1a1a, perfectly matching the html background */
+  min-height: 100vh;
+}
+
+/* Re-invert media so images and videos look normal */
+html.pl-dark-mode body img, 
+html.pl-dark-mode body video, 
+html.pl-dark-mode body iframe {
+  filter: invert(1) hue-rotate(180deg);
+}
