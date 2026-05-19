@@ -11,9 +11,10 @@ html.pl-dark-mode body {
   min-height: 100vh;
 }
 
-/* Re-invert media so images and videos look normal */
+/* Re-invert media and top bar so they look normal */
 html.pl-dark-mode body img, 
 html.pl-dark-mode body video, 
-html.pl-dark-mode body iframe {
+html.pl-dark-mode body iframe,
+html.pl-dark-mode body .navbar {
   filter: invert(1) hue-rotate(180deg);
 }
