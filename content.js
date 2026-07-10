@@ -1,5 +1,12 @@
+let isExtensionDisabled = false;
+
 // Check if dark mode is enabled in storage, if so apply it.
-chrome.storage.local.get(['darkMode'], function(result) {
+chrome.storage.local.get(['darkMode', 'extensionDisabled'], function(result) {
+  if (result.extensionDisabled) {
+    isExtensionDisabled = true;
+    return;
+  }
+
   if (result.darkMode) {
     document.documentElement.classList.add('pl-dark-mode');
   }
@@ -7,8 +14,26 @@ chrome.storage.local.get(['darkMode'], function(result) {
   applyGradeColors();
 });
 
-// Listen for messages from the popup to toggle dark mode
+// Listen for messages from the popup
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+  if (request.action === 'extensionDisabledChanged') {
+    isExtensionDisabled = request.disabled;
+    if (isExtensionDisabled) {
+      document.documentElement.classList.remove('pl-dark-mode');
+      resetGradeColors();
+    } else {
+      chrome.storage.local.get(['darkMode'], function(result) {
+        if (result.darkMode) {
+          document.documentElement.classList.add('pl-dark-mode');
+        }
+        applyGradeColors();
+      });
+    }
+    return;
+  }
+
+  if (isExtensionDisabled) return;
+  
   if (request.action === 'toggleDarkMode') {
     document.documentElement.classList.toggle('pl-dark-mode');
     // Re-apply grade colors with updated dark mode state
@@ -203,6 +228,7 @@ function applyGradeColors() {
 
 // Re-apply on dynamic content changes (PrairieLearn uses AJAX in some places)
 const observer = new MutationObserver(() => {
+  if (isExtensionDisabled) return;
   applyGradeColors();
 });
 observer.observe(document.body, { childList: true, subtree: true });

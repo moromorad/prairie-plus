@@ -14,3 +14,29 @@ document.getElementById('toggleBtn').addEventListener('click', () => {
     });
   });
 });
+
+chrome.storage.local.get(['extensionDisabled'], function(result) {
+  const disableBtn = document.getElementById('disableBtn');
+  if (result.extensionDisabled) {
+    disableBtn.textContent = 'Enable Extension';
+    disableBtn.style.backgroundColor = '#28a745';
+  } else {
+    disableBtn.textContent = 'Disable Extension';
+    disableBtn.style.backgroundColor = '#dc3545';
+  }
+});
+
+document.getElementById('disableBtn').addEventListener('click', () => {
+  chrome.storage.local.get(['extensionDisabled'], function(result) {
+    const newState = !result.extensionDisabled;
+    chrome.storage.local.set({extensionDisabled: newState}, function() {
+      // Reload active tab if it's on prairielearn so changes take effect
+      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        if (tabs.length > 0 && tabs[0].url && tabs[0].url.includes('prairielearn')) {
+          chrome.tabs.reload(tabs[0].id);
+        }
+      });
+      window.close(); // Close popup
+    });
+  });
+});

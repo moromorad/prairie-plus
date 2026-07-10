@@ -10,11 +10,19 @@
     "activeTab",
     "storage"
   ],
+  "host_permissions": [
+    "*://*.prairielearn.com/*",
+    "*://*.prairielearn.org/*",
+    "*://us.prairielearn.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["*://*.prairielearn.com/*", "*://*.prairielearn.org/*", "*://us.prairielearn.com/*"],
       "css": ["dark-mode.css"],
-      "js": ["content.js"]
+      "js": ["content.js", "tracker.js"]
     }
   ]
 }
