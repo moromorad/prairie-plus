@@ -22,7 +22,7 @@
     {
       "matches": ["*://*.prairielearn.com/*", "*://*.prairielearn.org/*", "*://us.prairielearn.com/*"],
       "css": ["dark-mode.css"],
-      "js": ["content.js", "tracker.js"]
+      "js": ["content.js", "tracker.js", "devmode.js"]
     }
   ]
 }
