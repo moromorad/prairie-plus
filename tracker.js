@@ -2,13 +2,19 @@
 
 class PrairieLearnTracker {
   constructor() {
-    chrome.storage.local.get(['extensionDisabled'], (result) => {
+    chrome.storage.local.get(['extensionDisabled', 'devMode'], (result) => {
       if (result.extensionDisabled) return;
+      this.devMode = !!result.devMode;
       this.init();
     });
   }
 
   init() {
+    if (this.devMode) {
+      this.initDevMode();
+      return;
+    }
+
     const path = window.location.pathname;
     
     // Check if on Home Page
@@ -28,28 +34,34 @@ class PrairieLearnTracker {
     const widget = document.getElementById('pl-extension-upcoming-widget');
     if (widget) widget.remove();
 
-    document.querySelectorAll('.btn-xs.ms-2').forEach(btn => {
-      if (btn.textContent === 'Pin' || btn.textContent === 'Unpin') btn.remove();
-    });
+    const mockSection = document.getElementById('pl-extension-mock-assessments');
+    if (mockSection) mockSection.remove();
+
+    document.querySelectorAll('[data-pl-ext-pin]').forEach(btn => btn.remove());
   }
 
   // --- Home Page Logic ---
 
   async initHomeWidget() {
+    // Prevent duplicate widget injection
+    if (document.getElementById('pl-extension-upcoming-widget')) return;
+
     // 1. Wait for the main container
-    let container = await this.waitForElement('.content > .container, main .container, [data-component="HomeCards"]', 2000);
+    let container = await this.waitForElement('main#content, .content > .container, main .container, [data-component="HomeCards"]', 2000);
     
     if (!container) {
-      // Aggressive fallback for empty pages where these elements might not exist
-      container = document.querySelector('#content') || document.querySelector('main') || document.querySelector('.container') || document.body;
+      // Aggressive fallback for pages where the primary selectors don't match
+      container = document.querySelector('main#content') || document.querySelector('main.container') || document.querySelector('#content') || document.querySelector('main') || document.querySelector('.container') || document.body;
     }
     
     if (!container) return;
 
-    // Do not inject the widget if the user is not enrolled in any courses
-    const courseIds = this.extractCourseIdsFromHome();
-    if (courseIds.length === 0) return;
-
+    // Do not inject the widget if the user is not enrolled in any courses (skip in dev mode)
+    if (!this.devMode) {
+      const courseIds = this.extractCourseIdsFromHome();
+      if (courseIds.length === 0) return;
+    } 
+    
     // 2. Create the widget UI
     const widget = document.createElement('div');
     widget.id = 'pl-extension-upcoming-widget';
@@ -85,35 +97,43 @@ class PrairieLearnTracker {
     
     body.innerHTML = '<div class="text-center text-muted">Loading...</div>';
 
-    // Get course IDs from the page
-    const courseIds = this.extractCourseIdsFromHome();
-    if (courseIds.length === 0) {
-      body.innerHTML = '<div class="text-muted">No enrolled courses found.</div>';
-      return;
-    }
+    try {
 
-    // Clear cache if forcing refresh
-    if (forceRefresh) {
-      await chrome.storage.local.remove(['courseCache']);
-    }
+    let allAssignments;
 
-    // 1. Fetch raw HTMLs from background
-    const fetchResponse = await chrome.runtime.sendMessage({
-      action: 'FETCH_ASSESSMENTS',
-      courseIds: courseIds,
-      origin: window.location.origin
-    });
+    if (this.devMode) {
+      allAssignments = this.getMockAssignments();
+    } else {
+      // Get course IDs from the page
+      const courseIds = this.extractCourseIdsFromHome();
+      if (courseIds.length === 0) {
+        body.innerHTML = '<div class="text-muted">No enrolled courses found.</div>';
+        return;
+      }
 
-    if (!fetchResponse.success) {
-      body.innerHTML = `<div class="text-danger">Error loading data: ${fetchResponse.error}</div>`;
-      return;
-    }
+      // Clear cache if forcing refresh
+      if (forceRefresh) {
+        await chrome.storage.local.remove(['courseCache']);
+      }
 
-    // 2. Parse the HTMLs
-    const allAssignments = [];
-    for (const [courseId, html] of Object.entries(fetchResponse.data)) {
-      const parsed = this.parseAssessmentsHTML(html, courseId);
-      allAssignments.push(...parsed);
+      // 1. Fetch raw HTMLs from background
+      const fetchResponse = await chrome.runtime.sendMessage({
+        action: 'FETCH_ASSESSMENTS',
+        courseIds: courseIds,
+        origin: window.location.origin
+      });
+
+      if (!fetchResponse.success) {
+        body.innerHTML = `<div class="text-danger">Error loading data: ${fetchResponse.error}</div>`;
+        return;
+      }
+
+      // 2. Parse the HTMLs
+      allAssignments = [];
+      for (const [courseId, html] of Object.entries(fetchResponse.data)) {
+        const parsed = this.parseAssessmentsHTML(html, courseId);
+        allAssignments.push(...parsed);
+      }
     }
 
     // 3. Get pinned assignments
@@ -151,6 +171,11 @@ class PrairieLearnTracker {
 
     // 5. Render
     this.renderUpcomingTable(body, displayItems);
+
+    } catch (err) {
+      console.error('PL Extension: Error loading dashboard data', err);
+      body.innerHTML = `<div class="text-danger">Error: ${err.message}</div>`;
+    }
   }
 
   extractCourseIdsFromHome() {
@@ -171,7 +196,9 @@ class PrairieLearnTracker {
     let courseName = `Course ${courseId}`;
     const navText = doc.querySelector('.navbar-text');
     if (navText) {
-      courseName = navText.textContent.trim().split('-')[0].trim();
+      const fullText = navText.textContent.trim();
+      const dashIdx = fullText.search(/\s[-\u2013\u2014]\s/);
+      courseName = dashIdx > 0 ? fullText.substring(0, dashIdx).trim() : fullText;
     }
 
     const rows = doc.querySelectorAll('table[aria-label="Assessments"] tbody tr');
@@ -198,26 +225,7 @@ class PrairieLearnTracker {
       else if (scoreText.toLowerCase().includes('closed')) score = 100; // Treat closed as complete
 
       // Due Date
-      let dueAt = null;
-      const popoverBtn = cells[2].querySelector('button[data-bs-toggle="popover"]');
-      
-      if (popoverBtn) {
-        const content = popoverBtn.getAttribute('data-bs-content') || '';
-        const popDoc = parser.parseFromString(content, 'text/html');
-        const popRows = popDoc.querySelectorAll('tr');
-        if (popRows.length > 1) {
-          const lastRow = popRows[popRows.length - 1];
-          const cols = lastRow.querySelectorAll('td');
-          if (cols.length >= 3) {
-            const dateText = cols[2].textContent.trim();
-            const cleanDateText = dateText.replace(/\([A-Z]+\)/, '').trim();
-            const d = new Date(cleanDateText);
-            if (!isNaN(d.getTime())) {
-              dueAt = d.toISOString();
-            }
-          }
-        }
-      }
+      const dueAt = this.extractDueDate(cells[2]);
 
       assignments.push({
         courseId,
@@ -288,6 +296,314 @@ class PrairieLearnTracker {
     container.innerHTML = html;
   }
 
+  // --- Dev Mode Logic ---
+
+  async initDevMode() {
+    try {
+      await this.setupMockPins();
+    } catch (err) {
+      console.warn('PL Extension: Mock pin setup failed (non-fatal)', err);
+    }
+
+    await this.initHomeWidget();
+
+    // Add dev mode indicator to widget header
+    const header = document.querySelector('#pl-extension-upcoming-widget .card-header');
+    if (header) {
+      header.classList.replace('bg-primary', 'bg-warning');
+      header.classList.replace('text-white', 'text-dark');
+      header.querySelector('h2').textContent = '\u{1F527} Upcoming Assignments (Dev Mode)';
+    }
+
+    await this.initMockAssessmentsSection();
+  }
+
+  async setupMockPins() {
+    // Pre-pin two items for demonstration (only if no pins exist yet)
+    try {
+      const existing = await chrome.runtime.sendMessage({ action: 'GET_PINS' });
+      if (existing.success && Object.keys(existing.pins).length > 0) return;
+    } catch (err) {
+      // Continue with setup even if check fails
+    }
+
+    const mockAssignments = this.getMockAssignments();
+    const pinsToSet = {};
+
+    // Pin "Homework 3: Gauss's Law" (has due date — tests auto-expiry)
+    const pinned1 = mockAssignments.find(a => a.url.includes('5010'));
+    if (pinned1) {
+      pinsToSet[`${pinned1.courseId}_${pinned1.url}`] = pinned1;
+    }
+
+    // Pin "Extra Credit: Red-Black Trees" (no due date — tests persistence)
+    const pinned2 = mockAssignments.find(a => a.url.includes('5011'));
+    if (pinned2) {
+      pinsToSet[`${pinned2.courseId}_${pinned2.url}`] = pinned2;
+    }
+
+    await chrome.storage.local.set({ pinnedAssessments: pinsToSet });
+  }
+
+  getMockAssignments() {
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+
+    return [
+      {
+        courseId: '1001',
+        courseName: 'CS-225 Data Structures',
+        title: 'Homework 7: Binary Trees',
+        url: '/pl/course_instance/1001/assessment/5001',
+        badge: 'HW',
+        score: 0,
+        dueAt: new Date(now + 1 * DAY).toISOString(),
+      },
+      {
+        courseId: '1001',
+        courseName: 'CS-225 Data Structures',
+        title: 'Lab 4: Hash Tables',
+        url: '/pl/course_instance/1001/assessment/5002',
+        badge: 'Lab',
+        score: 30,
+        dueAt: new Date(now + 3 * DAY).toISOString(),
+      },
+      {
+        courseId: '1002',
+        courseName: 'MATH 241 \u2013 Calculus III',
+        title: 'Midterm Practice Exam',
+        url: '/pl/course_instance/1002/assessment/5003',
+        badge: 'Exam',
+        score: 75,
+        dueAt: new Date(now + 7 * DAY).toISOString(),
+      },
+      {
+        courseId: '1002',
+        courseName: 'MATH 241 \u2013 Calculus III',
+        title: 'Homework 5: Partial Derivatives',
+        url: '/pl/course_instance/1002/assessment/5004',
+        badge: 'HW',
+        score: 50,
+        dueAt: new Date(now + 10 * DAY).toISOString(),
+      },
+      {
+        courseId: '1001',
+        courseName: 'CS-225 Data Structures',
+        title: 'Final Project: Graph Algorithms',
+        url: '/pl/course_instance/1001/assessment/5005',
+        badge: 'Project',
+        score: 0,
+        dueAt: new Date(now + 21 * DAY).toISOString(),
+      },
+      {
+        courseId: '1002',
+        courseName: 'MATH 241 \u2013 Calculus III',
+        title: 'Quiz 3: Vector Fields',
+        url: '/pl/course_instance/1002/assessment/5006',
+        badge: 'Quiz',
+        score: 45,
+        dueAt: new Date(now - 1 * DAY).toISOString(),
+      },
+      {
+        courseId: '1001',
+        courseName: 'CS-225 Data Structures',
+        title: 'Homework 6: Heaps',
+        url: '/pl/course_instance/1001/assessment/5007',
+        badge: 'HW',
+        score: 100,
+        dueAt: new Date(now + 5 * DAY).toISOString(),
+      },
+      {
+        courseId: '1003',
+        courseName: 'PHYS 212 \u2014 E&M',
+        title: 'Optional Practice Problems',
+        url: '/pl/course_instance/1003/assessment/5008',
+        badge: '',
+        score: 10,
+        dueAt: null,
+      },
+      {
+        courseId: '1003',
+        courseName: 'PHYS 212 \u2014 E&M',
+        title: 'Lab 2: Circuits (Closed)',
+        url: '/pl/course_instance/1003/assessment/5009',
+        badge: 'Lab',
+        score: 100,
+        dueAt: new Date(now - 3 * DAY).toISOString(),
+      },
+      {
+        courseId: '1003',
+        courseName: 'PHYS 212 \u2014 E&M',
+        title: 'Homework 3: Gauss\'s Law',
+        url: '/pl/course_instance/1003/assessment/5010',
+        badge: 'HW',
+        score: 0,
+        dueAt: new Date(now + 5 * DAY).toISOString(),
+      },
+      {
+        courseId: '1001',
+        courseName: 'CS-225 Data Structures',
+        title: 'Extra Credit: Red-Black Trees',
+        url: '/pl/course_instance/1001/assessment/5011',
+        badge: 'EC',
+        score: 0,
+        dueAt: null,
+      },
+    ];
+  }
+
+  async initMockAssessmentsSection() {
+    let container = document.querySelector('.content > .container') ||
+      document.querySelector('main .container') ||
+      document.querySelector('#content') ||
+      document.querySelector('.container') ||
+      document.body;
+
+    if (!container) return;
+    if (document.getElementById('pl-extension-mock-assessments')) return;
+
+    let pinnedMap = {};
+    try {
+      const pinsResponse = await chrome.runtime.sendMessage({ action: 'GET_PINS' });
+      pinnedMap = pinsResponse.success ? pinsResponse.pins : {};
+    } catch (err) {}
+
+    const assignments = this.getMockAssignments();
+
+    const edgeCases = [
+      'Due tomorrow, 0% \u2192 shows (urgent)',
+      'Due in 3d, 30% \u2192 shows',
+      'Due in 1w, 75% \u2192 shows',
+      'Due in 10d, 50% \u2192 shows',
+      'Due in 3w \u2192 FILTERED (>14 days)',
+      'Past due \u2192 FILTERED',
+      '100% complete \u2192 FILTERED',
+      'No due date \u2192 FILTERED (unless pinned)',
+      'Closed + past due \u2192 FILTERED',
+      'Due in 5d, 0% \u2192 PRE-PINNED',
+      'No due date \u2192 PRE-PINNED (persistence test)',
+    ];
+
+    const section = document.createElement('div');
+    section.id = 'pl-extension-mock-assessments';
+    section.className = 'card mb-4';
+    section.innerHTML = `
+      <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+        <h2 class="mb-0 h4">\u{1F9EA} Dev Mode \u2013 All Mock Assessments</h2>
+        <span class="badge bg-light text-dark">${assignments.length} items</span>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-2">Pin/unpin items below, then click <strong>Refresh</strong> on the widget above to see changes.</p>
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead>
+              <tr>
+                <th>Course</th>
+                <th>Assignment</th>
+                <th>Due</th>
+                <th>Score</th>
+                <th>Expected Behavior</th>
+              </tr>
+            </thead>
+            <tbody id="pl-ext-mock-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    const widget = document.getElementById('pl-extension-upcoming-widget');
+    if (widget && widget.parentNode) {
+      widget.parentNode.insertBefore(section, widget.nextSibling);
+    } else {
+      container.appendChild(section);
+    }
+
+    const tbody = document.getElementById('pl-ext-mock-tbody');
+
+    assignments.forEach((a, i) => {
+      const id = `${a.courseId}_${a.url}`;
+      let isPinned = !!pinnedMap[id];
+
+      const tr = document.createElement('tr');
+
+      const dueStr = a.dueAt ? new Date(a.dueAt).toLocaleString([], {
+        weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      }) : 'No due date';
+
+      const badge = a.badge ? `<span class="badge bg-secondary me-1">${a.badge}</span>` : '';
+      const desc = edgeCases[i] || '';
+      const descClass = desc.includes('FILTERED') ? 'text-danger' :
+                        desc.includes('PINNED') ? 'text-warning fw-bold' : 'text-success';
+
+      tr.innerHTML = `
+        <td class="align-middle">${a.courseName}</td>
+        <td class="align-middle">
+          ${badge}
+          <a href="${a.url}">${a.title}</a>
+        </td>
+        <td class="align-middle">${dueStr}</td>
+        <td class="align-middle">${a.score}%</td>
+        <td class="align-middle small ${descClass}">${desc}</td>
+      `;
+
+      const titleCell = tr.querySelectorAll('td')[1];
+      const btn = document.createElement('button');
+      btn.className = `btn btn-xs ms-2 ${isPinned ? 'btn-warning' : 'btn-outline-secondary'}`;
+      btn.textContent = isPinned ? 'Unpin' : 'Pin';
+      btn.setAttribute('data-pl-ext-pin', id);
+
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        btn.disabled = true;
+        try {
+          const assessment = { courseId: a.courseId, url: a.url, title: a.title, dueAt: a.dueAt };
+          const resp = await chrome.runtime.sendMessage({
+            action: 'TOGGLE_PIN',
+            assessment: assessment
+          });
+          if (resp.success) {
+            isPinned = resp.isPinned;
+            btn.className = `btn btn-xs ms-2 ${isPinned ? 'btn-warning' : 'btn-outline-secondary'}`;
+            btn.textContent = isPinned ? 'Unpin' : 'Pin';
+          }
+        } catch (err) {
+          console.error('PL Extension: Failed to toggle pin', err);
+        }
+        btn.disabled = false;
+      });
+
+      titleCell.appendChild(btn);
+      tbody.appendChild(tr);
+    });
+  }
+
+  // --- Due Date Extraction ---
+
+  extractDueDate(cell) {
+    if (!cell) return null;
+    const popoverBtn = cell.querySelector('button[data-bs-toggle="popover"]');
+    if (!popoverBtn) return null;
+
+    const content = popoverBtn.getAttribute('data-bs-content') || '';
+    const parser = new DOMParser();
+    const popDoc = parser.parseFromString(content, 'text/html');
+    const popRows = popDoc.querySelectorAll('tr');
+
+    if (popRows.length > 1) {
+      const lastRow = popRows[popRows.length - 1];
+      const cols = lastRow.querySelectorAll('td');
+      if (cols.length >= 3) {
+        const dateText = cols[2].textContent.trim();
+        const cleanDateText = dateText.replace(/\([A-Z]+\)/, '').trim();
+        const d = new Date(cleanDateText);
+        if (!isNaN(d.getTime())) {
+          return d.toISOString();
+        }
+      }
+    }
+    return null;
+  }
+
   // --- Assessments Page Logic ---
 
   async initPinButtons(courseId) {
@@ -295,13 +611,18 @@ class PrairieLearnTracker {
     if (!table) return;
 
     // Get current pins to set initial state
-    const pinsResponse = await chrome.runtime.sendMessage({ action: 'GET_PINS' });
-    const pinnedMap = pinsResponse.success ? pinsResponse.pins : {};
+    let pinnedMap = {};
+    try {
+      const pinsResponse = await chrome.runtime.sendMessage({ action: 'GET_PINS' });
+      pinnedMap = pinsResponse.success ? pinsResponse.pins : {};
+    } catch (err) {
+      console.error('PL Extension: Failed to load pins', err);
+    }
 
     const rows = table.querySelectorAll('tbody tr');
     rows.forEach(row => {
       const cells = row.querySelectorAll('td');
-      if (cells.length < 4) return; // not an assessment row
+      if (cells.length < 4) return;
 
       const titleCell = cells[1];
       const link = titleCell.querySelector('a');
@@ -309,29 +630,35 @@ class PrairieLearnTracker {
 
       const url = link.getAttribute('href');
       const title = link.textContent.trim();
-      
+      const dueAt = this.extractDueDate(cells[2]);
+
       const id = `${courseId}_${url}`;
       let isPinned = !!pinnedMap[id];
 
       const btn = document.createElement('button');
       btn.className = `btn btn-xs ms-2 ${isPinned ? 'btn-warning' : 'btn-outline-secondary'}`;
       btn.textContent = isPinned ? 'Unpin' : 'Pin';
-      
+      btn.setAttribute('data-pl-ext-pin', id);
+
       btn.addEventListener('click', async (e) => {
         e.preventDefault();
         btn.disabled = true;
-        
-        const assessment = { courseId, url, title, dueAt: null }; 
 
-        const resp = await chrome.runtime.sendMessage({
-          action: 'TOGGLE_PIN',
-          assessment: assessment
-        });
+        try {
+          const assessment = { courseId, url, title, dueAt };
 
-        if (resp.success) {
-          isPinned = resp.isPinned;
-          btn.className = `btn btn-xs ms-2 ${isPinned ? 'btn-warning' : 'btn-outline-secondary'}`;
-          btn.textContent = isPinned ? 'Unpin' : 'Pin';
+          const resp = await chrome.runtime.sendMessage({
+            action: 'TOGGLE_PIN',
+            assessment: assessment
+          });
+
+          if (resp.success) {
+            isPinned = resp.isPinned;
+            btn.className = `btn btn-xs ms-2 ${isPinned ? 'btn-warning' : 'btn-outline-secondary'}`;
+            btn.textContent = isPinned ? 'Unpin' : 'Pin';
+          }
+        } catch (err) {
+          console.error('PL Extension: Failed to toggle pin', err);
         }
         btn.disabled = false;
       });
@@ -374,7 +701,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.disabled) {
       tracker.destroy();
     } else {
-      tracker.init();
+      chrome.storage.local.get(['devMode'], (result) => {
+        tracker.devMode = !!result.devMode;
+        tracker.init();
+      });
     }
   }
 });
