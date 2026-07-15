@@ -50,8 +50,9 @@ chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
   if (tabs.length === 0) return;
   const url = tabs[0].url || '';
   const devBtn = document.getElementById('devModeBtn');
+  const devLabel = document.getElementById('devModeLabel');
   if (url.startsWith('http://localhost')) {
-    devBtn.textContent = '🔧 Dev Mode: ON';
+    devLabel.textContent = 'Dev Mode: ON';
     devBtn.style.backgroundColor = '#fd7e14';
   }
 });
