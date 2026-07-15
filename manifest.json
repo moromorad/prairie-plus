@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "PrarieLearn Extension ",
+  "name": "PrairieLearn Extension ",
   "version": "1.0",
-  "description": "PrarieLearn Extension",
+  "description": "PrairieLearn Extension",
   "action": {
     "default_popup": "popup.html"
   },
