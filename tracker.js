@@ -2,19 +2,13 @@
 
 class PrairieLearnTracker {
   constructor() {
-    chrome.storage.local.get(['extensionDisabled', 'devMode'], (result) => {
+    chrome.storage.local.get(['extensionDisabled'], (result) => {
       if (result.extensionDisabled) return;
-      this.devMode = !!result.devMode && typeof this.initDevMode === 'function';
       this.init();
     });
   }
 
   init() {
-    if (this.devMode) {
-      this.initDevMode();
-      return;
-    }
-
     const path = window.location.pathname;
     
     // Check if on Home Page
@@ -33,9 +27,6 @@ class PrairieLearnTracker {
   destroy() {
     const widget = document.getElementById('pl-extension-upcoming-widget');
     if (widget) widget.remove();
-
-    const mockSection = document.getElementById('pl-extension-mock-assessments');
-    if (mockSection) mockSection.remove();
 
     document.querySelectorAll('[data-pl-ext-pin]').forEach(btn => btn.remove());
   }
@@ -56,12 +47,10 @@ class PrairieLearnTracker {
     
     if (!container) return;
 
-    // Do not inject the widget if the user is not enrolled in any courses (skip in dev mode)
-    if (!this.devMode) {
-      const courseIds = this.extractCourseIdsFromHome();
-      if (courseIds.length === 0) return;
-    } 
-    
+    // Do not inject the widget if the user is not enrolled in any courses
+    const courseIds = this.extractCourseIdsFromHome();
+    if (courseIds.length === 0) return;
+
     // 2. Create the widget UI
     const widget = document.createElement('div');
     widget.id = 'pl-extension-upcoming-widget';
@@ -99,41 +88,35 @@ class PrairieLearnTracker {
 
     try {
 
-    let allAssignments;
+    // Get course IDs from the page
+    const courseIds = this.extractCourseIdsFromHome();
+    if (courseIds.length === 0) {
+      body.innerHTML = '<div class="text-muted">No enrolled courses found.</div>';
+      return;
+    }
 
-    if (this.devMode) {
-      allAssignments = this.getMockAssignments();
-    } else {
-      // Get course IDs from the page
-      const courseIds = this.extractCourseIdsFromHome();
-      if (courseIds.length === 0) {
-        body.innerHTML = '<div class="text-muted">No enrolled courses found.</div>';
-        return;
-      }
+    // Clear cache if forcing refresh
+    if (forceRefresh) {
+      await chrome.storage.local.remove(['courseCache']);
+    }
 
-      // Clear cache if forcing refresh
-      if (forceRefresh) {
-        await chrome.storage.local.remove(['courseCache']);
-      }
+    // 1. Fetch raw HTMLs from background
+    const fetchResponse = await chrome.runtime.sendMessage({
+      action: 'FETCH_ASSESSMENTS',
+      courseIds: courseIds,
+      origin: window.location.origin
+    });
 
-      // 1. Fetch raw HTMLs from background
-      const fetchResponse = await chrome.runtime.sendMessage({
-        action: 'FETCH_ASSESSMENTS',
-        courseIds: courseIds,
-        origin: window.location.origin
-      });
+    if (!fetchResponse.success) {
+      body.innerHTML = `<div class="text-danger">Error loading data: ${fetchResponse.error}</div>`;
+      return;
+    }
 
-      if (!fetchResponse.success) {
-        body.innerHTML = `<div class="text-danger">Error loading data: ${fetchResponse.error}</div>`;
-        return;
-      }
-
-      // 2. Parse the HTMLs
-      allAssignments = [];
-      for (const [courseId, html] of Object.entries(fetchResponse.data)) {
-        const parsed = this.parseAssessmentsHTML(html, courseId);
-        allAssignments.push(...parsed);
-      }
+    // 2. Parse the HTMLs
+    const allAssignments = [];
+    for (const [courseId, html] of Object.entries(fetchResponse.data)) {
+      const parsed = this.parseAssessmentsHTML(html, courseId);
+      allAssignments.push(...parsed);
     }
 
     // 3. Get pinned assignments
@@ -296,8 +279,6 @@ class PrairieLearnTracker {
     container.innerHTML = html;
   }
 
-  // Dev Mode Logic is injected from devmode.js
-
   // --- Due Date Extraction ---
 
   extractDueDate(cell) {
@@ -422,10 +403,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.disabled) {
       tracker.destroy();
     } else {
-      chrome.storage.local.get(['devMode'], (result) => {
-        tracker.devMode = !!result.devMode && typeof tracker.initDevMode === 'function';
-        tracker.init();
-      });
+      tracker.init();
     }
   }
 });

@@ -8,21 +8,23 @@
   },
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "tabs"
   ],
   "host_permissions": [
     "*://*.prairielearn.com/*",
     "*://*.prairielearn.org/*",
-    "*://us.prairielearn.com/*"
+    "*://us.prairielearn.com/*",
+    "http://localhost/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["*://*.prairielearn.com/*", "*://*.prairielearn.org/*", "*://us.prairielearn.com/*"],
+      "matches": ["*://*.prairielearn.com/*", "*://*.prairielearn.org/*", "*://us.prairielearn.com/*", "http://localhost/*"],
       "css": ["dark-mode.css"],
-      "js": ["content.js", "tracker.js", "devmode.js"]
+      "js": ["content.js", "tracker.js"]
     }
   ]
 }

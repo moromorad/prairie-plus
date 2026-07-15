@@ -12,9 +12,19 @@ html.pl-dark-mode body {
 }
 
 /* Re-invert media and top bar so they look normal */
-html.pl-dark-mode body img, 
-html.pl-dark-mode body video, 
-html.pl-dark-mode body iframe,
+html.pl-dark-mode body img,
+html.pl-dark-mode body video,
+html.pl-dark-mode body iframe {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/*
+ * The navbar counter-filter creates a nested stacking context inside body's filter context.
+ * Bootstrap's default z-index: 1030 is insufficient once body's filter rewrites stacking order,
+ * so we force the navbar's stacking context to the top to keep dropdowns above main content.
+ */
 html.pl-dark-mode body .navbar {
   filter: invert(1) hue-rotate(180deg);
+  position: relative !important;
+  z-index: 9999 !important;
 }

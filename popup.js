@@ -41,25 +41,27 @@ document.getElementById('disableBtn').addEventListener('click', () => {
   });
 });
 
-// Dev Mode button
-chrome.storage.local.get(['devMode'], function(result) {
+// Dev mode: state is determined by the current tab URL (localhost = dev mode ON)
+// Clicking the button navigates between localhost:3000 and prod
+const PROD_URL = 'https://us.prairielearn.com/pl';
+const DEV_URL = 'http://localhost:3000/pl';
+
+chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+  if (tabs.length === 0) return;
+  const url = tabs[0].url || '';
   const devBtn = document.getElementById('devModeBtn');
-  if (result.devMode) {
+  if (url.startsWith('http://localhost')) {
     devBtn.textContent = '🔧 Dev Mode: ON';
     devBtn.style.backgroundColor = '#fd7e14';
   }
 });
 
 document.getElementById('devModeBtn').addEventListener('click', () => {
-  chrome.storage.local.get(['devMode'], function(result) {
-    const newState = !result.devMode;
-    chrome.storage.local.set({devMode: newState}, function() {
-      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-        if (tabs.length > 0 && tabs[0].url && tabs[0].url.includes('prairielearn')) {
-          chrome.tabs.reload(tabs[0].id);
-        }
-      });
-      window.close();
-    });
+  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+    if (tabs.length === 0) return;
+    const url = tabs[0].url || '';
+    const target = url.startsWith('http://localhost') ? PROD_URL : DEV_URL;
+    chrome.tabs.update(tabs[0].id, { url: target });
+    window.close();
   });
 });
