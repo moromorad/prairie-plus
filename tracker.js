@@ -22,6 +22,11 @@ class PrairieLearnTracker {
       const courseId = assessmentsMatch[1];
       this.initPinButtons(courseId);
     }
+
+    // Check if on a Question Page (student view of an instance question)
+    if (path.includes('/instance_question/')) {
+      this.initVariantStats();
+    }
   }
 
   destroy() {
@@ -29,6 +34,9 @@ class PrairieLearnTracker {
     if (widget) widget.remove();
 
     document.querySelectorAll('[data-pl-ext-pin]').forEach(btn => btn.remove());
+
+    const statsRow = document.getElementById('pl-ext-variant-stats');
+    if (statsRow) statsRow.remove();
   }
 
   // --- Home Page Logic ---
@@ -367,6 +375,72 @@ class PrairieLearnTracker {
 
       link.parentElement.appendChild(btn);
     });
+  }
+
+  // --- Question Page Logic (variant statistics) ---
+
+  /**
+   * On a question page, the score panel (right sidebar) shows a row of badges
+   * under "All variants:" — one per variant, each either "NN%" or "Open".
+   * This injects a summary row (average / best / counts) directly below it,
+   * between the variants row and the points rows.
+   */
+  async initVariantStats() {
+    const panel = await this.waitForElement('#question-score-panel-content');
+    if (!panel) return;
+    if (document.getElementById('pl-ext-variant-stats')) return;
+
+    // Find the "All variants:" row (only present on Homework-type assessments)
+    const variantsRow = Array.from(panel.querySelectorAll('tbody > tr')).find(row =>
+      row.textContent.trim().startsWith('All variants:')
+    );
+    if (!variantsRow) return;
+
+    // Each variant is an <a class="badge"> containing "NN%" or "Open".
+    // Older overflowed variants are hidden with display:none but still in the
+    // DOM, so this includes every variant. The current variant's badge also
+    // contains a visually-hidden "(current)" span, so match loosely.
+    const scores = [];
+    let openCount = 0;
+    variantsRow.querySelectorAll('a.badge').forEach(badge => {
+      const text = badge.textContent;
+      const match = text.match(/(\d+(?:\.\d+)?)\s*%/);
+      if (match) {
+        scores.push(parseFloat(match[1]));
+      } else if (/\bopen\b/i.test(text)) {
+        openCount++;
+      }
+    });
+
+    const total = scores.length + openCount;
+    if (total === 0) return;
+
+    let summaryHTML;
+    if (scores.length === 0) {
+      summaryHTML = '<small class="text-muted">No graded variants yet</small>';
+    } else {
+      const avg = Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length);
+      const best = Math.max(...scores);
+      const perfectCount = scores.filter(s => s >= 100).length;
+
+      const counts = [`${perfectCount}/${scores.length} perfect`];
+      if (openCount > 0) counts.push(`${openCount} open`);
+
+      summaryHTML = `
+        <span class="text-nowrap me-1">Avg <span class="badge text-bg-secondary">${avg}%</span></span>
+        <span class="text-nowrap me-1">Best <span class="badge text-bg-secondary">${best}%</span></span>
+        <small class="text-muted text-nowrap">${counts.join(' &middot; ')}</small>
+      `;
+    }
+
+    const statsRow = document.createElement('tr');
+    statsRow.id = 'pl-ext-variant-stats';
+    statsRow.innerHTML = `
+      <td colspan="2" class="text-wrap">
+        Variant stats: ${summaryHTML}
+      </td>
+    `;
+    variantsRow.insertAdjacentElement('afterend', statsRow);
   }
 
   waitForElement(selector, timeout = 5000) {

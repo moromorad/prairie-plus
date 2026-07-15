@@ -9,6 +9,7 @@ A Chrome/browser extension (Manifest V3) for PrairieLearn that adds:
 - **Pin/Unpin buttons** on individual course assessment pages
 - **Dark mode** toggled from the popup
 - **Grade colorization** on assessment score bars and badges (red → orange → green)
+- **Variant statistics** on question pages — a summary row (avg/best/perfect/open counts, parsed from the "All variants" badges) injected into the question score panel
 - **Dev mode** — navigates to a local PrairieLearn instance at `http://localhost:3000`
 
 ## Loading the extension
@@ -57,6 +58,7 @@ Expires after 5 minutes; force-cleared when the user clicks Refresh.
 
 - **Home page** (`/`, `/pl`, `/pl/`): injects the upcoming widget, fetches all course assessment pages via background, filters to assignments due within 14 days and not 100% complete, pinned items always shown
 - **Assessments page** (`/pl/course_instance/:id/assessments`): adds Pin/Unpin buttons inline to each table row
+- **Question page** (path contains `/instance_question/`): injects a `Variant stats` row into `#question-score-panel-content`, directly after the "All variants:" row. Stats are computed from the variant badges (`a.badge` with "NN%" or "Open" text); hidden overflow badges are included. Only appears on Homework-type assessments (Exams have no "All variants" row).
 
 ### Dark mode implementation (content.js + dark-mode.css)
 
