@@ -1,2 +1,30 @@
-# PrarieLearn Extension
-Made by Omar Morad and Lok Tin Wong.
+# PrairieLearn Extension
+
+A Chrome extension that adds several useful features to [PrairieLearn](https://us.prairielearn.com/).
+
+## Features
+
+- Toggleable dark mode
+- Variant tracker
+  - Counts how many variants of a question are completed, and how many are perfect.
+  - Displays average and best score of all variants of a question.
+- Coloured score bar
+
+The following features are taken from [PrairieLearn-Assignment-Tracker](https://github.com/roshanr2706/PrairieLearn-Assignment-Tracker) by [roshanr2706](https://github.com/roshanr2706):
+
+- Widget on home page that shows upcoming assignments
+- Pin buttons to pin individual assignments to home page
+
+## Setup (without Chrome Web Store)
+
+1. Clone this GitHub repo and remember where the repo folder is saved.
+2. Go to Extensions in Google Chrome and turn on developer mode.
+3. Click the **Load unpacked** button.
+4. When prompted to choose a local folder, select the folder of this repo.
+5. Under **All extensions**, make sure that **PrairieLearn Extension** is toggled on.
+
+## Credits
+
+Made by [Omar Morad](https://github.com/moromorad) and [Lok Tin Wong](https://github.com/LokTinWong).
+
+Some features are taken from [PrairieLearn-Assignment-Tracker](https://github.com/roshanr2706/PrairieLearn-Assignment-Tracker) by [roshanr2706](https://github.com/roshanr2706).
