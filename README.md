@@ -10,7 +10,7 @@ A Chrome extension that adds several useful features to [PrairieLearn](https://u
   - Displays average and best score of all variants of a question.
 - Coloured score bar
 
-The following features are taken from [PrairieLearn-Assignment-Tracker](https://github.com/roshanr2706/PrairieLearn-Assignment-Tracker) by [roshanr2706](https://github.com/roshanr2706):
+The following features are inspired by [PrairieLearn-Assignment-Tracker](https://github.com/roshanr2706/PrairieLearn-Assignment-Tracker) by [roshanr2706](https://github.com/roshanr2706):
 
 - Widget on home page that shows upcoming assignments
 - Pin buttons to pin individual assignments to home page
@@ -27,4 +27,4 @@ The following features are taken from [PrairieLearn-Assignment-Tracker](https://
 
 Made by [Omar Morad](https://github.com/moromorad) and [Lok Tin Wong](https://github.com/LokTinWong).
 
-Some features are taken from [PrairieLearn-Assignment-Tracker](https://github.com/roshanr2706/PrairieLearn-Assignment-Tracker) by [roshanr2706](https://github.com/roshanr2706).
+Some features are inspired by [PrairieLearn-Assignment-Tracker](https://github.com/roshanr2706/PrairieLearn-Assignment-Tracker) by [roshanr2706](https://github.com/roshanr2706).
