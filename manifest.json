@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "PrairiePlus",
   "version": "1.0",
-  "description": "PrairieLearn Extension",
+  "description": "A PrairieLearn extension that adds several useful features.",
   "action": {
     "default_popup": "popup.html"
   },
