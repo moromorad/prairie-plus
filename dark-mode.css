@@ -6,15 +6,21 @@ html.pl-dark-mode {
 
 /* Apply the filter to the body instead of html so the background canvas is unaffected */
 html.pl-dark-mode body {
-  filter: invert(0.9) hue-rotate(180deg);
-  background-color: #ffffff !important; /* White inverts to #1a1a1a, perfectly matching the html background */
+  filter: invert(1) hue-rotate(180deg);
+  background-color: #e5e5e5 !important; /* Inverts to #1a1a1a, perfectly matching the html background */
   min-height: 100vh;
 }
 
-/* Re-invert media and top bar so they look normal */
+/* Re-invert media so they look normal */
 html.pl-dark-mode body img,
 html.pl-dark-mode body video,
 html.pl-dark-mode body iframe {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Explicitly dark elements (like terminal windows) get fully re-inverted to restore their true dark appearance */
+html.pl-dark-mode body .bg-dark,
+html.pl-dark-mode body .text-bg-dark {
   filter: invert(1) hue-rotate(180deg);
 }
 
