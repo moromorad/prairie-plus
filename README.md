@@ -1,4 +1,4 @@
-# PrairieLearn Extension
+# PrairiePlus
 
 A Chrome extension that adds several useful features to [PrairieLearn](https://us.prairielearn.com/).
 
@@ -15,13 +15,13 @@ The following features are inspired by [PrairieLearn-Assignment-Tracker](https:/
 - Widget on home page that shows upcoming assignments
 - Pin buttons to pin individual assignments to home page
 
-## Setup (without Chrome Web Store)
+## Local Setup (without Chrome Web Store)
 
 1. Clone this GitHub repo and remember where the repo folder is saved.
 2. Go to Extensions in Google Chrome and turn on developer mode.
 3. Click the **Load unpacked** button.
 4. When prompted to choose a local folder, select the folder of this repo.
-5. Under **All extensions**, make sure that **PrairieLearn Extension** is toggled on.
+5. Under **All extensions**, make sure that **PrairiePlus** is toggled on.
 
 ## Credits
 
