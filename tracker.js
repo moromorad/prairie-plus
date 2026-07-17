@@ -2,13 +2,13 @@
 
 class PrairieLearnTracker {
   constructor() {
-    chrome.storage.local.get(['extensionDisabled'], (result) => {
+    chrome.storage.local.get(['extensionDisabled', 'disableMathPreview'], (result) => {
       if (result.extensionDisabled) return;
-      this.init();
+      this.init(result.disableMathPreview);
     });
   }
 
-  init() {
+  init(disableMathPreview = false) {
     const path = window.location.pathname;
     
     // Check if on Home Page
@@ -19,13 +19,15 @@ class PrairieLearnTracker {
     // Check if on Assessments Page
     const assessmentsMatch = path.match(/\/pl\/course_instance\/(\d+)\/assessments\/?$/);
     if (assessmentsMatch) {
-      const courseId = assessmentsMatch[1];
-      this.initPinButtons(courseId);
+      this.initAssessmentsStats();
     }
 
     // Check if on a Question Page (student view of an instance question)
     if (path.includes('/instance_question/')) {
       this.initVariantStats();
+      if (!disableMathPreview) {
+        this.initMathRenderer();
+      }
     }
   }
 
@@ -443,6 +445,85 @@ class PrairieLearnTracker {
     variantsRow.insertAdjacentElement('afterend', statsRow);
   }
 
+  // --- Question Page Logic (Math Preview) ---
+
+  initMathRenderer() {
+    const selector = '.pl-symbolic-input, .pl-string-input';
+    document.querySelectorAll(selector).forEach(el => this.setupMathPreview(el));
+
+    const observer = new MutationObserver((mutations) => {
+      for (const mut of mutations) {
+        if (mut.type === 'childList') {
+          mut.addedNodes.forEach(node => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              if (node.matches && node.matches(selector)) {
+                this.setupMathPreview(node);
+              }
+              if (node.querySelectorAll) {
+                node.querySelectorAll(selector).forEach(el => this.setupMathPreview(el));
+              }
+            }
+          });
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  setupMathPreview(containerEl) {
+    if (containerEl.dataset.plExtMathPreview) return;
+    containerEl.dataset.plExtMathPreview = 'true';
+
+    // Find the input field, which could be inside shadow DOM or just a child
+    let input = containerEl.querySelector('input:not([type="hidden"])') || containerEl.querySelector('textarea');
+    if (!input && containerEl.shadowRoot) {
+      input = containerEl.shadowRoot.querySelector('input:not([type="hidden"])') || containerEl.shadowRoot.querySelector('textarea');
+    }
+    
+    // If no input is found inside, maybe containerEl itself is the input
+    if (!input && (containerEl.tagName === 'INPUT' || containerEl.tagName === 'TEXTAREA')) {
+        input = containerEl;
+    }
+
+    if (!input) {
+      console.warn('PL Extension: No input found for math preview inside', containerEl);
+      return;
+    }
+
+    const previewDiv = document.createElement('div');
+    previewDiv.className = 'pl-ext-math-preview mt-2 p-2 border rounded bg-light text-dark';
+    previewDiv.style.minHeight = '3em';
+    // Always show it so the user knows it's there
+    previewDiv.style.display = 'block';
+    
+    // Insert after the container to avoid breaking Bootstrap's .input-group flex layout
+    containerEl.insertAdjacentElement('afterend', previewDiv);
+
+    const updatePreview = () => {
+      const val = input.value.trim();
+      if (!val) {
+        previewDiv.innerHTML = '<span class="text-muted small">Type LaTeX to preview...</span>';
+        return;
+      }
+      
+      if (typeof katex !== 'undefined') {
+        const latexStr = plToLatex(val);
+        katex.render(latexStr, previewDiv, {
+          throwOnError: false,
+          displayMode: true,
+          output: 'htmlAndMathml'
+        });
+      } else {
+        previewDiv.textContent = 'Error: KaTeX not loaded';
+      }
+    };
+
+    input.addEventListener('input', updatePreview);
+    
+    // Initial render
+    updatePreview();
+  }
+
   waitForElement(selector, timeout = 5000) {
     return new Promise(resolve => {
       if (document.querySelector(selector)) {
@@ -481,3 +562,171 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
   }
 });
+
+// --- PL to LaTeX Conversion Helpers ---
+
+function plToLatex(str) {
+  if (!str) return '';
+  let out = str;
+
+  // 1. Balanced functions (abs, Abs, sqrt, factorial)
+  out = replaceBalancedFunc(out, 'sqrt', '\\sqrt{', '}');
+  out = replaceBalancedFunc(out, 'abs', '\\left|{', '}\\right|');
+  out = replaceBalancedFunc(out, 'Abs', '\\left|{', '}\\right|');
+  out = replaceBalancedFunc(out, 'factorial', '(', ')!');
+
+  // 2. Fractions (Heuristic)
+  out = replaceFractions(out);
+
+  // 3. Constants
+  out = out.replace(/(^|[^\\])\b(pi|infty)\b/g, '$1\\$2');
+
+  // 4. Exponentiation
+  out = out.replace(/\*\*/g, '^');
+
+  // 5. Functions
+  const funcs = ['exp', 'log', 'ln', 'sgn', 'max', 'min', 'sign', 'Max', 'Min',
+                 'cos', 'sin', 'tan', 'sec', 'cot', 'csc', 'cosh', 'sinh', 'tanh',
+                 'arccos', 'arcsin', 'arctan', 'acos', 'asin', 'atan', 'arctan2', 'atan2', 'atanh', 'acosh', 'asinh'];
+  const funcRegex = new RegExp('(^|[^\\\\])\\b(' + funcs.join('|') + ')\\b', 'g');
+  out = out.replace(funcRegex, '$1\\$2');
+
+  // 6. Greek letters
+  const greekLetters = ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'omicron', 'rho', 'sigma', 'tau', 'upsilon', 'phi', 'chi', 'psi', 'omega',
+                        'Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta', 'Iota', 'Kappa', 'Lambda', 'Mu', 'Nu', 'Xi', 'Omicron', 'Rho', 'Sigma', 'Tau', 'Upsilon', 'Phi', 'Chi', 'Psi', 'Omega'];
+  const greekRegex = new RegExp('(^|[^\\\\])\\b(' + greekLetters.join('|') + ')\\b', 'g');
+  out = out.replace(greekRegex, '$1\\$2');
+
+  return out;
+}
+
+function replaceBalancedFunc(str, funcName, prefix, suffix) {
+  let result = '';
+  let i = 0;
+  let searchStr = funcName + '(';
+  
+  while (i < str.length) {
+    let idx = str.indexOf(searchStr, i);
+    if (idx === -1) {
+      result += str.substring(i);
+      break;
+    }
+    // Ensure word boundary before funcName
+    if (idx > 0 && /[a-zA-Z0-9_]/.test(str[idx-1])) {
+      result += str.substring(i, idx + 1);
+      i = idx + 1;
+      continue;
+    }
+    
+    result += str.substring(i, idx) + prefix;
+    
+    let pCount = 1;
+    let j = idx + searchStr.length;
+    let inner = '';
+    while (j < str.length && pCount > 0) {
+      if (str[j] === '(') pCount++;
+      else if (str[j] === ')') pCount--;
+      
+      if (pCount > 0) inner += str[j];
+      j++;
+    }
+    
+    // Process inner recursively for the same function
+    result += replaceBalancedFunc(inner, funcName, prefix, suffix) + suffix;
+    i = j;
+  }
+  return result;
+}
+
+function replaceFractions(str) {
+  let result = '';
+  let i = 0;
+  
+  while (i < str.length) {
+    let char = str[i];
+    if (char === '/') {
+      // Find numerator from the END of `result`
+      let numStart = result.length - 1;
+      while (numStart >= 0 && /\s/.test(result[numStart])) numStart--;
+      
+      let actualNumStart = numStart;
+      if (numStart >= 0) {
+        if (result[numStart] === ')') {
+          let pCount = 1;
+          actualNumStart--;
+          while (actualNumStart >= 0 && pCount > 0) {
+            if (result[actualNumStart] === ')') pCount++;
+            else if (result[actualNumStart] === '(') pCount--;
+            actualNumStart--;
+          }
+          actualNumStart++;
+        } else if (result[numStart] === '}') {
+          let pCount = 1;
+          actualNumStart--;
+          while (actualNumStart >= 0 && pCount > 0) {
+            if (result[actualNumStart] === '}') pCount++;
+            else if (result[actualNumStart] === '{') pCount--;
+            actualNumStart--;
+          }
+          while (actualNumStart >= 0 && /[a-zA-Z\\]/.test(result[actualNumStart])) {
+            actualNumStart--;
+          }
+          actualNumStart++;
+        } else {
+          while (actualNumStart >= 0 && /[a-zA-Z0-9_.]/.test(result[actualNumStart])) {
+            actualNumStart--;
+          }
+          actualNumStart++;
+        }
+      } else {
+        actualNumStart = 0;
+      }
+      
+      if (result[actualNumStart] === '(') {
+         let funcStart = actualNumStart - 1;
+         while (funcStart >= 0 && /[a-zA-Z0-9_]/.test(result[funcStart])) {
+           funcStart--;
+         }
+         actualNumStart = funcStart + 1;
+      }
+
+      let numerator = result.substring(actualNumStart).trim();
+      result = result.substring(0, actualNumStart);
+      
+      // Find denominator from `str`
+      let denStart = i + 1;
+      while (denStart < str.length && /\s/.test(str[denStart])) denStart++;
+      
+      let actualDenEnd = denStart;
+      if (denStart < str.length) {
+        let tempEnd = denStart;
+        while (tempEnd < str.length && /[a-zA-Z0-9_]/.test(str[tempEnd])) tempEnd++;
+        if (tempEnd < str.length && str[tempEnd] === '(') {
+           actualDenEnd = tempEnd;
+        }
+        
+        if (str[actualDenEnd] === '(') {
+          let pCount = 1;
+          actualDenEnd++;
+          while (actualDenEnd < str.length && pCount > 0) {
+            if (str[actualDenEnd] === '(') pCount++;
+            else if (str[actualDenEnd] === ')') pCount--;
+            actualDenEnd++;
+          }
+        } else {
+          while (actualDenEnd < str.length && /[a-zA-Z0-9_.]/.test(str[actualDenEnd])) {
+            actualDenEnd++;
+          }
+        }
+      }
+      
+      let denominator = str.substring(denStart, actualDenEnd).trim();
+      result += '\\frac{' + numerator + '}{' + denominator + '}';
+      i = actualDenEnd;
+    } else {
+      result += char;
+      i++;
+    }
+  }
+  return result;
+}

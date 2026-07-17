@@ -10,8 +10,9 @@ chrome.storage.local.get(['darkMode', 'extensionDisabled'], function(result) {
   if (result.darkMode) {
     document.documentElement.classList.add('pl-dark-mode');
   }
-  // Apply grade colors after dark mode state is known
+  // Apply grade colors and fix dark elements after dark mode state is known
   applyGradeColors();
+  fixDarkElements();
 });
 
 // Listen for messages from the popup
@@ -21,12 +22,14 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (isExtensionDisabled) {
       document.documentElement.classList.remove('pl-dark-mode');
       resetGradeColors();
+      resetDarkElements();
     } else {
       chrome.storage.local.get(['darkMode'], function(result) {
         if (result.darkMode) {
           document.documentElement.classList.add('pl-dark-mode');
         }
         applyGradeColors();
+        fixDarkElements();
       });
     }
     return;
@@ -36,9 +39,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   
   if (request.action === 'toggleDarkMode') {
     document.documentElement.classList.toggle('pl-dark-mode');
-    // Re-apply grade colors with updated dark mode state
+    // Re-apply styles with updated dark mode state
     resetGradeColors();
+    resetDarkElements();
     applyGradeColors();
+    fixDarkElements();
   }
 });
 
@@ -138,6 +143,62 @@ function resetGradeColors() {
 }
 
 /**
+ * Remove filter-cancelling from dynamically detected dark elements
+ */
+function resetDarkElements() {
+  document.querySelectorAll('[data-pl-dark-reverted]').forEach(el => {
+    el.removeAttribute('data-pl-dark-reverted');
+    el.style.removeProperty('filter');
+  });
+}
+
+/**
+ * Dynamically find code blocks, terminals, or explicitly dark elements
+ * and re-invert them so they stay dark in dark mode.
+ */
+function fixDarkElements() {
+  if (!isDarkMode()) return;
+
+  // We check pre, pl-code contents, terminals, and any dark-bg classes
+  const elements = document.querySelectorAll('pre, .pl-code > div, .terminal, .console, [class*="bg-dark"]');
+  elements.forEach(el => {
+    if (el.dataset.plDarkReverted) return;
+    
+    // Prevent double-inversion if a parent is already handling it
+    if (el.closest('[data-pl-dark-reverted="true"]')) {
+      el.dataset.plDarkReverted = 'skipped';
+      return;
+    }
+    
+    // We check the computed background color
+    const style = window.getComputedStyle(el);
+    const bgColor = style.backgroundColor;
+    
+    const match = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+      const r = parseInt(match[1]);
+      const g = parseInt(match[2]);
+      const b = parseInt(match[3]);
+      
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+      
+      const aMatch = bgColor.match(/rgba?\(\d+,\s*\d+,\s*\d+,\s*([\d.]+)\)/);
+      const alpha = aMatch ? parseFloat(aMatch[1]) : 1;
+      
+      // If the background is dark (luminance < 100) and opaque
+      if (luminance < 100 && alpha > 0.1) {
+        el.style.setProperty('filter', 'hue-rotate(180deg) invert(1)', 'important');
+        el.dataset.plDarkReverted = 'true';
+      } else {
+        el.dataset.plDarkReverted = 'skipped';
+      }
+    } else {
+      el.dataset.plDarkReverted = 'skipped';
+    }
+  });
+}
+
+/**
  * Colorize progress bars on the assessments list page.
  * Structure: .progress > .progress-bar (filled) + .d-flex (remaining with % text)
  */
@@ -230,5 +291,6 @@ function applyGradeColors() {
 const observer = new MutationObserver(() => {
   if (isExtensionDisabled) return;
   applyGradeColors();
+  fixDarkElements();
 });
 observer.observe(document.body, { childList: true, subtree: true });
