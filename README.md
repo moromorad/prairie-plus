@@ -23,6 +23,15 @@ The following features are inspired by [PrairieLearn-Assignment-Tracker](https:/
 4. When prompted to choose a local folder, select the folder of this repo.
 5. Under **All extensions**, make sure that **PrairiePlus** is toggled on.
 
+## Local Update (without Chrome Web Store)
+
+Here is how to update the extension if you previously acquired it through cloning this GitHub repo, instead of through Chrome Web Store.
+
+1. Open your terminal, and navigate to the directory of the repo folder.
+2. Run `git pull`. This is to update your files to match the latest state of the repo.
+3. Go to Extensions in Google Chrome and make sure that developer mode is on.
+4. Under **PrairiePlus**, next to the toggle icon, click the reload icon.
+
 ## Credits
 
 Made by [Omar Morad](https://github.com/moromorad) and [Lok Tin Wong](https://github.com/LokTinWong).
