@@ -32,5 +32,8 @@
       "resources": ["lib/katex/fonts/*"],
       "matches": ["*://*.prairielearn.com/*", "*://*.prairielearn.org/*", "*://us.prairielearn.com/*", "http://localhost/*"]
     }
-  ]
+  ],
+  "icons": {
+    "128": "icons/icon128.png"
+  }
 }
