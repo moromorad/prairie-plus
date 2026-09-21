@@ -292,7 +292,9 @@ class PrairieLearnTracker {
       else if (scoreText.toLowerCase().includes('closed')) score = 100; // Treat closed as complete
 
       // Due Date
-      const dueAt = this.extractDueDate(cells[2]);
+      const dueInfo = this.extractDueDate(cells[2]);
+      const dueAt = dueInfo ? dueInfo.iso : null;
+      const creditTier = dueInfo ? dueInfo.credit : null;
 
       assignments.push({
         courseId,
@@ -301,7 +303,8 @@ class PrairieLearnTracker {
         url,
         badge,
         score,
-        dueAt
+        dueAt,
+        creditTier
       });
     });
 
@@ -332,9 +335,13 @@ class PrairieLearnTracker {
       const pinBadge = item.isPinned ? `<span class="badge bg-warning text-dark me-1" title="Pinned">Pinned</span>` : '';
       const badgeHTML = item.badge ? `<span class="badge bg-secondary me-1">${escapeHtml(item.badge)}</span>` : '';
       
-      const dueStr = item.dueAt ? new Date(item.dueAt).toLocaleString([], {
+      const formattedDate = item.dueAt ? new Date(item.dueAt).toLocaleString([], {
         weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
       }) : 'No due date';
+
+      const dueDisplay = (item.creditTier != null && item.dueAt)
+        ? `${item.creditTier}% until ${formattedDate}`
+        : formattedDate;
 
       let progColor = 'secondary';
       if (item.score >= 100) progColor = 'success';
@@ -352,7 +359,7 @@ class PrairieLearnTracker {
             ${badgeHTML}
             <a href="${safeUrl}">${escapeHtml(item.title)}</a>
           </td>
-          <td class="align-middle">${escapeHtml(dueStr)}</td>
+          <td class="align-middle text-nowrap">${escapeHtml(dueDisplay)}</td>
           <td class="align-middle" style="min-width: 120px;">
             <div class="progress border border-${progColor}">
               <div class="progress-bar bg-${progColor}" style="width: ${safeScore}%">${safeScore}%</div>
@@ -368,28 +375,117 @@ class PrairieLearnTracker {
 
   // --- Due Date Extraction ---
 
+  parseDateString(str) {
+    if (!str) return null;
+    const clean = str.replace(/\([A-Za-z0-9_+\-:\s]+\)/g, '').trim();
+    if (!clean || clean === '—' || clean === '-') return null;
+
+    const currentYear = new Date().getFullYear();
+    const hasYear = /\b20\d{2}\b/.test(clean);
+
+    if (hasYear) {
+      const d = new Date(clean);
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    // Format: "23:59, Mon, Sep 21" or "14:30, Mon, Jan 5"
+    const m1 = clean.match(/(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]m)?)[,\s]+(?:[A-Za-z]{3},?\s+)?([A-Za-z]{3,9})\s+(\d{1,2})/i);
+    if (m1) {
+      const time = m1[1];
+      const month = m1[2];
+      const day = m1[3];
+      const d = new Date(`${month} ${day}, ${currentYear} ${time}`);
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    // Format: "Mon, Sep 21, 11:59 PM" or "Sep 21, 11:59 PM"
+    const m2 = clean.match(/(?:[A-Za-z]{3},?\s+)?([A-Za-z]{3,9})\s+(\d{1,2})(?:,?\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]m)?))?/i);
+    if (m2) {
+      const month = m2[1];
+      const day = m2[2];
+      const time = m2[3] || '23:59';
+      const d = new Date(`${month} ${day}, ${currentYear} ${time}`);
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    const d = new Date(clean);
+    if (!isNaN(d.getTime())) return d;
+
+    return null;
+  }
+
   extractDueDate(cell) {
     if (!cell) return null;
+    const now = Date.now();
+
+    // 1. Try parsing access rules from the popover table
     const popoverBtn = cell.querySelector('button[data-bs-toggle="popover"]');
-    if (!popoverBtn) return null;
+    if (popoverBtn) {
+      const content = popoverBtn.getAttribute('data-bs-content') || '';
+      if (content) {
+        const parser = new DOMParser();
+        const popDoc = parser.parseFromString(content, 'text/html');
+        const popRows = popDoc.querySelectorAll('tr');
 
-    const content = popoverBtn.getAttribute('data-bs-content') || '';
-    const parser = new DOMParser();
-    const popDoc = parser.parseFromString(content, 'text/html');
-    const popRows = popDoc.querySelectorAll('tr');
+        const tiers = [];
+        popRows.forEach(row => {
+          const cols = row.querySelectorAll('td');
+          if (cols.length >= 3) {
+            const creditStr = cols[0].textContent.trim();
+            const dateStr = cols[2].textContent.trim();
+            const d = this.parseDateString(dateStr);
+            if (d) {
+              const creditMatch = creditStr.match(/(\d+(?:\.\d+)?)%/);
+              const credit = creditMatch ? parseFloat(creditMatch[1]) : (creditStr.toLowerCase().includes('none') ? 0 : 100);
+              tiers.push({
+                credit,
+                date: d,
+                iso: d.toISOString(),
+                time: d.getTime()
+              });
+            }
+          }
+        });
 
-    if (popRows.length > 1) {
-      const lastRow = popRows[popRows.length - 1];
-      const cols = lastRow.querySelectorAll('td');
-      if (cols.length >= 3) {
-        const dateText = cols[2].textContent.trim();
-        const cleanDateText = dateText.replace(/\([A-Z]+\)/, '').trim();
-        const d = new Date(cleanDateText);
-        if (!isNaN(d.getTime())) {
-          return d.toISOString();
+        if (tiers.length > 0) {
+          // Priority 1: 100% full-credit deadline in the future (the primary due date)
+          const futureFullCredit = tiers.find(t => t.credit >= 100 && t.time >= now);
+          if (futureFullCredit) return { iso: futureFullCredit.iso, credit: futureFullCredit.credit };
+
+          // Priority 2: Earliest upcoming deadline with any credit (> 0) (e.g. in late submission window)
+          const futureCreditTiers = tiers
+            .filter(t => t.credit > 0 && t.time >= now)
+            .sort((a, b) => a.time - b.time);
+          if (futureCreditTiers.length > 0) return { iso: futureCreditTiers[0].iso, credit: futureCreditTiers[0].credit };
+
+          // Priority 3: 100% deadline (even if in the past)
+          const fullCreditTier = tiers.find(t => t.credit >= 100);
+          if (fullCreditTier) return { iso: fullCreditTier.iso, credit: fullCreditTier.credit };
+
+          // Priority 4: Earliest tier deadline
+          return { iso: tiers[0].iso, credit: tiers[0].credit };
         }
       }
     }
+
+    // 2. Fallback: Parse PrairieLearn's creditDateString directly from cell text
+    // E.g. "100% until 23:59, Mon, Sep 21" or "100% until Mon, Sep 21, 11:59 PM"
+    const cellClone = cell.cloneNode(true);
+    cellClone.querySelectorAll('button, [data-bs-toggle="popover"]').forEach(el => el.remove());
+    const cellText = cellClone.textContent.trim();
+
+    const creditMatch = cellText.match(/(\d+(?:\.\d+)?)%/);
+    const credit = creditMatch ? parseFloat(creditMatch[1]) : (cellText.toLowerCase().includes('none') ? 0 : 100);
+
+    const untilMatch = cellText.match(/until\s+(.+?)(?:\s*$|\s*\(|\s*\n)/i);
+    if (untilMatch) {
+      const d = this.parseDateString(untilMatch[1]);
+      if (d) return { iso: d.toISOString(), credit };
+    }
+
+    const directDate = this.parseDateString(cellText);
+    if (directDate) return { iso: directDate.toISOString(), credit };
+
     return null;
   }
 
@@ -419,7 +515,9 @@ class PrairieLearnTracker {
 
       const url = link.getAttribute('href');
       const title = link.textContent.trim();
-      const dueAt = this.extractDueDate(cells[2]);
+      const dueInfo = this.extractDueDate(cells[2]);
+      const dueAt = dueInfo ? dueInfo.iso : null;
+      const creditTier = dueInfo ? dueInfo.credit : null;
 
       const id = `${courseId}_${url}`;
       let isPinned = !!pinnedMap[id];
@@ -434,7 +532,7 @@ class PrairieLearnTracker {
         btn.disabled = true;
 
         try {
-          const assessment = { courseId, url, title, dueAt };
+          const assessment = { courseId, url, title, dueAt, creditTier };
 
           const resp = await chrome.runtime.sendMessage({
             action: 'TOGGLE_PIN',
