@@ -10,7 +10,6 @@ A Chrome/browser extension (Manifest V3) for PrairieLearn that adds:
 - **Dark mode** toggled from the popup
 - **Grade colorization** on assessment score bars and badges (red → orange → green)
 - **Variant statistics** on question pages — a summary row (avg/best/perfect/open counts, parsed from the "All variants" badges) injected into the question score panel
-- **Dev mode** — navigates to a local PrairieLearn instance at `http://localhost:3000`
 
 ## Loading the extension
 
@@ -30,7 +29,7 @@ After any code change, click the reload button on the extension card in `chrome:
 | `background.js` | Service worker | Fetches assessment HTML pages (with 5-min cache in `chrome.storage.local`), manages pin storage, handles `FETCH_ASSESSMENTS` / `TOGGLE_PIN` / `GET_PINS` messages |
 | `content.js` | Injected into every PL page | Dark mode class toggling, grade colorization of `.progress` bars and `.badge` elements |
 | `tracker.js` | Injected into every PL page | `PrairieLearnTracker` class — detects current page path, injects the home widget or pin buttons, parses HTML responses from background |
-| `popup.js` | Extension popup | Sends messages to content script for dark mode; uses `chrome.tabs.update` for dev mode navigation |
+| `popup.js` | Extension popup | Controls extension toggle, live math preview toggle, and dark mode |
 
 ### Message passing flow
 
@@ -63,10 +62,6 @@ Expires after 5 minutes; force-cleared when the user clicks Refresh.
 ### Dark mode implementation (content.js + dark-mode.css)
 
 Applied as `html.pl-dark-mode` class. CSS uses `filter: invert(0.9) hue-rotate(180deg)` on `<body>`, with counter-filters on images, video, and iframes. The `.navbar` also gets a counter-filter to restore its original colors, but this creates a nested stacking context — so the navbar is explicitly given `position: relative; z-index: 9999` to keep its dropdown above the main content. Grade color elements use a JS wrapper div with `filter: hue-rotate(180deg) invert(1)` to cancel the body filter and preserve true RGB colors.
-
-### Dev mode
-
-The popup button checks if the active tab URL starts with `http://localhost` and navigates between `http://localhost:3000/pl` and `https://us.prairielearn.com/pl`. No storage state — dev mode is implicit from the current URL. The extension runs identically on localhost and prod; all content scripts and background fetches use `window.location.origin` so they naturally target whichever host is active.
 
 ## Reference project
 

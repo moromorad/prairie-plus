@@ -8,21 +8,18 @@
   },
   "permissions": [
     "activeTab",
-    "storage",
-    "tabs"
+    "storage"
   ],
   "host_permissions": [
     "*://*.prairielearn.com/*",
-    "*://*.prairielearn.org/*",
-    "*://us.prairielearn.com/*",
-    "http://localhost/*"
+    "*://*.prairielearn.org/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["*://*.prairielearn.com/*", "*://*.prairielearn.org/*", "*://us.prairielearn.com/*", "http://localhost/*"],
+      "matches": ["*://*.prairielearn.com/*", "*://*.prairielearn.org/*"],
       "css": ["lib/katex/katex.min.css", "dark-mode.css"],
       "js": ["lib/katex/katex.min.js", "content.js", "tracker.js"]
     }
@@ -30,7 +27,7 @@
   "web_accessible_resources": [
     {
       "resources": ["lib/katex/fonts/*"],
-      "matches": ["*://*.prairielearn.com/*", "*://*.prairielearn.org/*", "*://us.prairielearn.com/*", "http://localhost/*"]
+      "matches": ["*://*.prairielearn.com/*", "*://*.prairielearn.org/*"]
     }
   ],
   "icons": {

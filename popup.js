@@ -48,26 +48,4 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // 4. Developer Mode
-  const PROD_URL = 'https://us.prairielearn.com/pl';
-  const DEV_URL = 'http://localhost:3000/pl';
-
-  chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-    if (tabs.length === 0) return;
-    const url = tabs[0].url || '';
-    if (url.startsWith('http://localhost')) {
-      document.getElementById('toggleDevMode').checked = true;
-    } else {
-      document.getElementById('toggleDevMode').checked = false;
-    }
-  });
-
-  document.getElementById('toggleDevMode').addEventListener('change', (e) => {
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-      if (tabs.length === 0) return;
-      const target = e.target.checked ? DEV_URL : PROD_URL;
-      chrome.tabs.update(tabs[0].id, { url: target });
-      setTimeout(() => window.close(), 100);
-    });
-  });
 });
