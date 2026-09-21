@@ -149,7 +149,18 @@ function resetGradeColors() {
     if (w) el.style.width = w;
   });
   document.querySelectorAll('.progress .d-flex').forEach(el => {
+    let w = el.style.width;
+    if (!w) {
+      const filledBar = el.parentElement ? el.parentElement.querySelector('.progress-bar') : null;
+      if (filledBar && filledBar.style.width) {
+        const grade = parseFloat(filledBar.style.width);
+        if (!isNaN(grade)) {
+          w = `${100 - Math.floor(Math.min(100, grade))}%`;
+        }
+      }
+    }
     el.removeAttribute('style');
+    if (w) el.style.width = w;
   });
 
   // Reset badge styles
@@ -250,6 +261,9 @@ function colorizeProgressBars() {
     // Style the text inside the bar
     const textDiv = bar.querySelector('.d-flex');
     if (textDiv) {
+      if (!textDiv.style.width) {
+        textDiv.style.width = `${100 - Math.floor(Math.min(100, grade))}%`;
+      }
       textDiv.style.setProperty('color', '#ffffff', 'important');
       textDiv.style.setProperty('font-weight', 'bold', 'important');
       textDiv.style.setProperty('text-shadow', '0 1px 2px rgba(0,0,0,0.5)', 'important');
