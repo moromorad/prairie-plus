@@ -1,7 +1,7 @@
 let isExtensionDisabled = false;
 
-// Check if dark mode is enabled in storage, if so apply it.
-chrome.storage.local.get(['darkMode', 'extensionDisabled'], function(result) {
+// Check if dark mode or workspace invert is enabled in storage, if so apply it.
+chrome.storage.local.get(['darkMode', 'extensionDisabled', 'invertWorkspaceIframe'], function(result) {
   if (result.extensionDisabled) {
     isExtensionDisabled = true;
     return;
@@ -9,6 +9,9 @@ chrome.storage.local.get(['darkMode', 'extensionDisabled'], function(result) {
 
   if (result.darkMode) {
     document.documentElement.classList.add('pl-dark-mode');
+  }
+  if (result.invertWorkspaceIframe) {
+    document.documentElement.classList.add('pl-invert-workspace');
   }
   // Apply grade colors and fix dark elements after dark mode state is known
   applyGradeColors();
@@ -21,12 +24,16 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     isExtensionDisabled = request.disabled;
     if (isExtensionDisabled) {
       document.documentElement.classList.remove('pl-dark-mode');
+      document.documentElement.classList.remove('pl-invert-workspace');
       resetGradeColors();
       resetDarkElements();
     } else {
-      chrome.storage.local.get(['darkMode'], function(result) {
+      chrome.storage.local.get(['darkMode', 'invertWorkspaceIframe'], function(result) {
         if (result.darkMode) {
           document.documentElement.classList.add('pl-dark-mode');
+        }
+        if (result.invertWorkspaceIframe) {
+          document.documentElement.classList.add('pl-invert-workspace');
         }
         applyGradeColors();
         fixDarkElements();
@@ -44,6 +51,16 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     resetDarkElements();
     applyGradeColors();
     fixDarkElements();
+    return;
+  }
+
+  if (request.action === 'toggleInvertWorkspace') {
+    if (request.inverted) {
+      document.documentElement.classList.add('pl-invert-workspace');
+    } else {
+      document.documentElement.classList.remove('pl-invert-workspace');
+    }
+    return;
   }
 });
 

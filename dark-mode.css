@@ -18,6 +18,22 @@ html.pl-dark-mode body iframe {
   filter: invert(1) hue-rotate(180deg);
 }
 
+/*
+ * Fullscreen Media Fix:
+ * When an element (such as an embedded YouTube iframe or HTML5 video) enters fullscreen,
+ * it is promoted to the browser's Top Layer where ancestor filters (like body's invert filter)
+ * are not applied. To prevent the media counter-filter from inverting the fullscreened media,
+ * we clear the filter while in fullscreen mode.
+ */
+html.pl-dark-mode body iframe:fullscreen,
+html.pl-dark-mode body iframe:-webkit-full-screen,
+html.pl-dark-mode body video:fullscreen,
+html.pl-dark-mode body video:-webkit-full-screen,
+html.pl-dark-mode body :fullscreen,
+html.pl-dark-mode body :-webkit-full-screen {
+  filter: none !important;
+}
+
 /* Explicitly dark elements (like terminal windows) get fully re-inverted to restore their true dark appearance */
 html.pl-dark-mode body .bg-dark,
 html.pl-dark-mode body .text-bg-dark {
@@ -34,3 +50,101 @@ html.pl-dark-mode body .navbar {
   position: relative !important;
   z-index: 9999 !important;
 }
+
+/* --- Workspace Dark Mode Overrides --- */
+
+/* Workspace Navbar (PrairieLearn uses .navbar.bg-info on workspace pages) */
+html.pl-dark-mode body .navbar.bg-info {
+  background-color: #1e293b !important; /* Slate navy */
+  border-bottom: 1px solid #334155 !important;
+}
+
+/* Workspace Navbar Title Link and Subtitle */
+html.pl-dark-mode body .navbar.bg-info a,
+html.pl-dark-mode body .navbar.bg-info .h6 a {
+  color: #f8fafc !important;
+  text-decoration: none;
+}
+html.pl-dark-mode body .navbar.bg-info a:hover {
+  color: #38bdf8 !important;
+}
+html.pl-dark-mode body .navbar.bg-info span.small {
+  color: #94a3b8 !important;
+}
+
+/* Prevent double-inversion on dark badges inside the already counter-filtered navbar */
+html.pl-dark-mode body .navbar .text-bg-dark,
+html.pl-dark-mode body .navbar .bg-dark {
+  filter: none !important;
+  background-color: #0f172a !important;
+  color: #e2e8f0 !important;
+  border: 1px solid #334155 !important;
+}
+
+/* Workspace Navbar Controls (#reboot, #reset, logs, help, and extension buttons) */
+html.pl-dark-mode body #workspace-nav .btn-light,
+html.pl-dark-mode body #workspace-nav .btn {
+  background-color: #334155 !important;
+  border-color: #475569 !important;
+  color: #f8fafc !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+html.pl-dark-mode body #workspace-nav .btn-light:hover,
+html.pl-dark-mode body #workspace-nav .btn:hover {
+  background-color: #475569 !important;
+  border-color: #64748b !important;
+  color: #ffffff !important;
+}
+html.pl-dark-mode body #workspace-nav .btn-light.active,
+html.pl-dark-mode body #workspace-nav .btn.active {
+  background-color: #0284c7 !important;
+  border-color: #38bdf8 !important;
+  color: #ffffff !important;
+}
+
+/* Workspace Modals (#rebootModal, #resetModal) */
+html.pl-dark-mode .modal-content {
+  filter: invert(1) hue-rotate(180deg);
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border: 1px solid #334155 !important;
+}
+html.pl-dark-mode .modal-header,
+html.pl-dark-mode .modal-footer {
+  border-color: #334155 !important;
+}
+html.pl-dark-mode .modal-header .btn-close {
+  filter: invert(1) !important;
+}
+html.pl-dark-mode .modal-backdrop {
+  filter: invert(1) hue-rotate(180deg);
+  background-color: #000000 !important;
+  opacity: 0.65 !important;
+}
+html.pl-dark-mode .modal .btn-secondary {
+  background-color: #475569 !important;
+  border-color: #64748b !important;
+  color: #f8fafc !important;
+}
+
+/* Workspace Popover (Help button contents) */
+html.pl-dark-mode .popover {
+  filter: invert(1) hue-rotate(180deg);
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+html.pl-dark-mode .popover .popover-body,
+html.pl-dark-mode .popover .list-group-item {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+/* Workspace Iframe Invert Toggle */
+/* Default: body iframe has filter: invert(1) hue-rotate(180deg) which cancels body filter */
+/* When pl-invert-workspace is active, remove the counter-filter so iframe inverts with body */
+html.pl-dark-mode.pl-invert-workspace body iframe#workspace {
+  filter: none !important;
+}
+

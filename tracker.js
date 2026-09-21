@@ -29,6 +29,12 @@ class PrairieLearnTracker {
         this.initMathRenderer();
       }
     }
+
+    // Check if on a Workspace Page
+    const workspaceMatch = path.match(/\/pl\/(?:public\/)?workspace\/(\d+)/);
+    if (workspaceMatch) {
+      this.initWorkspaceControls();
+    }
   }
 
   destroy() {
@@ -39,6 +45,74 @@ class PrairieLearnTracker {
 
     const statsRow = document.getElementById('pl-ext-variant-stats');
     if (statsRow) statsRow.remove();
+
+    const invertItem = document.getElementById('pl-ext-invert-workspace-item');
+    if (invertItem) invertItem.remove();
+  }
+
+  // --- Workspace Page Logic ---
+
+  async initWorkspaceControls() {
+    const navList = await this.waitForElement('#workspace-nav .navbar-nav');
+    if (!navList) return;
+    if (document.getElementById('pl-ext-invert-workspace-item')) return;
+
+    const li = document.createElement('li');
+    li.className = 'nav-item ms-2 my-1';
+    li.id = 'pl-ext-invert-workspace-item';
+
+    const btn = document.createElement('button');
+    btn.id = 'pl-ext-invert-workspace-btn';
+    btn.className = 'nav-item btn btn-light';
+    btn.type = 'button';
+    btn.title = 'Invert workspace editor (useful for light-themed tools like JupyterLab or RStudio)';
+
+    const updateBtnUI = (inverted) => {
+      btn.innerHTML = `<i class="fas fa-${inverted ? 'sun text-warning' : 'moon text-secondary'}" aria-hidden="true"></i> Invert Editor`;
+      btn.classList.toggle('active', inverted);
+    };
+
+    chrome.storage.local.get(['invertWorkspaceIframe'], (result) => {
+      const isInverted = !!result.invertWorkspaceIframe;
+      if (isInverted) {
+        document.documentElement.classList.add('pl-invert-workspace');
+      }
+      updateBtnUI(isInverted);
+    });
+
+    btn.addEventListener('click', () => {
+      chrome.storage.local.get(['invertWorkspaceIframe'], (result) => {
+        const newState = !result.invertWorkspaceIframe;
+        chrome.storage.local.set({ invertWorkspaceIframe: newState }, () => {
+          document.documentElement.classList.toggle('pl-invert-workspace', newState);
+          updateBtnUI(newState);
+        });
+      });
+    });
+
+    if (!this._storageListenerBound) {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes.invertWorkspaceIframe !== undefined) {
+          const val = !!changes.invertWorkspaceIframe.newValue;
+          document.documentElement.classList.toggle('pl-invert-workspace', val);
+          const currentBtn = document.getElementById('pl-ext-invert-workspace-btn');
+          if (currentBtn) {
+            currentBtn.innerHTML = `<i class="fas fa-${val ? 'sun text-warning' : 'moon text-secondary'}" aria-hidden="true"></i> Invert Editor`;
+            currentBtn.classList.toggle('active', val);
+          }
+        }
+      });
+      this._storageListenerBound = true;
+    }
+
+    li.appendChild(btn);
+
+    const lastItem = navList.lastElementChild;
+    if (lastItem) {
+      navList.insertBefore(li, lastItem);
+    } else {
+      navList.appendChild(li);
+    }
   }
 
   // --- Home Page Logic ---
@@ -118,7 +192,7 @@ class PrairieLearnTracker {
     });
 
     if (!fetchResponse.success) {
-      body.innerHTML = `<div class="text-danger">Error loading data: ${fetchResponse.error}</div>`;
+      body.innerHTML = `<div class="text-danger">Error loading data: ${escapeHtml(fetchResponse.error)}</div>`;
       return;
     }
 
@@ -167,7 +241,7 @@ class PrairieLearnTracker {
 
     } catch (err) {
       console.error('PL Extension: Error loading dashboard data', err);
-      body.innerHTML = `<div class="text-danger">Error: ${err.message}</div>`;
+      body.innerHTML = `<div class="text-danger">Error: ${escapeHtml(err.message)}</div>`;
     }
   }
 
@@ -256,7 +330,7 @@ class PrairieLearnTracker {
 
     items.forEach(item => {
       const pinBadge = item.isPinned ? `<span class="badge bg-warning text-dark me-1" title="Pinned">Pinned</span>` : '';
-      const badgeHTML = item.badge ? `<span class="badge bg-secondary me-1">${item.badge}</span>` : '';
+      const badgeHTML = item.badge ? `<span class="badge bg-secondary me-1">${escapeHtml(item.badge)}</span>` : '';
       
       const dueStr = item.dueAt ? new Date(item.dueAt).toLocaleString([], {
         weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -267,18 +341,21 @@ class PrairieLearnTracker {
       else if (item.score >= 50) progColor = 'primary';
       else if (item.score > 0) progColor = 'warning';
 
+      const safeUrl = item.url ? encodeURI(item.url) : '#';
+      const safeScore = Number.isFinite(item.score) ? Math.max(0, Math.min(100, item.score)) : 0;
+
       html += `
         <tr>
-          <td class="align-middle">${item.courseName}</td>
+          <td class="align-middle">${escapeHtml(item.courseName)}</td>
           <td class="align-middle">
             ${pinBadge}
             ${badgeHTML}
-            <a href="${item.url}">${item.title}</a>
+            <a href="${safeUrl}">${escapeHtml(item.title)}</a>
           </td>
-          <td class="align-middle">${dueStr}</td>
+          <td class="align-middle">${escapeHtml(dueStr)}</td>
           <td class="align-middle" style="min-width: 120px;">
             <div class="progress border border-${progColor}">
-              <div class="progress-bar bg-${progColor}" style="width: ${item.score}%">${item.score}%</div>
+              <div class="progress-bar bg-${progColor}" style="width: ${safeScore}%">${safeScore}%</div>
             </div>
           </td>
         </tr>
@@ -562,6 +639,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
   }
 });
+
+// --- HTML Escaping Helper ---
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 // --- PL to LaTeX Conversion Helpers ---
 

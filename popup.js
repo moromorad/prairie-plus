@@ -48,4 +48,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // 4. Invert Workspace Editor (note: storage is `invertWorkspaceIframe`)
+  chrome.storage.local.get(['invertWorkspaceIframe'], function(result) {
+    document.getElementById('toggleInvertWorkspace').checked = !!result.invertWorkspaceIframe;
+  });
+
+  document.getElementById('toggleInvertWorkspace').addEventListener('change', (e) => {
+    const newState = e.target.checked;
+    chrome.storage.local.set({invertWorkspaceIframe: newState}, function() {
+      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        if (tabs.length === 0) return;
+        chrome.tabs.sendMessage(tabs[0].id, {action: 'toggleInvertWorkspace', inverted: newState});
+      });
+    });
+  });
+
 });
+
