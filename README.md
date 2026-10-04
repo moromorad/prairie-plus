@@ -9,6 +9,7 @@ A Chrome extension that adds several useful features to [PrairieLearn](https://u
   - Counts how many variants of a question are completed, and how many are perfect.
   - Displays average and best score of all variants of a question.
 - Coloured score bar
+- A live Math preview that renders LaTeX code
 
 The following features are inspired by [PrairieLearn-Assignment-Tracker](https://github.com/roshanr2706/PrairieLearn-Assignment-Tracker) by [roshanr2706](https://github.com/roshanr2706):
 
@@ -31,6 +32,12 @@ Here is how to update the extension if you previously acquired it through clonin
 2. Run `git pull`. This is to update your files to match the latest state of the repo.
 3. Go to Extensions in Google Chrome and make sure that developer mode is on.
 4. Under **PrairiePlus**, next to the toggle icon, click the reload icon.
+
+## Report an Issue
+
+Please join our Discord server if you want to report an issue.
+
+Invite link: [https://discord.gg/gcv7u2tzXy](https://discord.gg/gcv7u2tzXy)
 
 ## Credits
 
