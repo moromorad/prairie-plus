@@ -19,7 +19,7 @@ class PrairieLearnTracker {
     // Check if on Assessments Page
     const assessmentsMatch = path.match(/\/pl\/course_instance\/(\d+)\/assessments\/?$/);
     if (assessmentsMatch) {
-      this.initAssessmentsStats();
+      this.initPinButtons(assessmentsMatch[1]);
     }
 
     // Check if on a Question Page (student view of an instance question)

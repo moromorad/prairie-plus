@@ -44,3 +44,7 @@ Invite link: [https://discord.gg/gcv7u2tzXy](https://discord.gg/gcv7u2tzXy)
 Made by [Omar Morad](https://github.com/moromorad) and [Lok Tin Wong](https://github.com/LokTinWong).
 
 Some features are inspired by [PrairieLearn-Assignment-Tracker](https://github.com/roshanr2706/PrairieLearn-Assignment-Tracker) by [roshanr2706](https://github.com/roshanr2706).
+
+## License
+
+[MIT](LICENSE). Bundles [KaTeX](https://katex.org/), also under the MIT License (see [lib/katex/LICENSE](lib/katex/LICENSE)).
